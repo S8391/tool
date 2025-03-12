@@ -1,0 +1,135 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SVG Builder - Modern SVG Editor</title>
+    <link rel="stylesheet" href="src/css/styles.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <meta name="description" content="A modern, sleek SVG renderer and editor with export capabilities">
+</head>
+<body>
+    <div class="app-container">
+        <header class="app-header">
+            <div class="logo">
+                <svg width="40" height="40" viewBox="0 0 40 40">
+                    <path d="M10,10 L30,10 L30,30 L10,30 Z" fill="none" stroke="currentColor" stroke-width="2"></path>
+                    <path d="M15,15 C20,5 25,25 30,15" fill="none" stroke="currentColor" stroke-width="2"></path>
+                </svg>
+                <h1>SVG Builder</h1>
+            </div>
+            <div class="toolbar">
+                <button id="new-svg" class="btn" title="New SVG"><i class="fas fa-file"></i></button>
+                <button id="open-svg" class="btn" title="Open SVG"><i class="fas fa-folder-open"></i></button>
+                <button id="save-svg" class="btn" title="Save SVG"><i class="fas fa-save"></i></button>
+                <button id="export-svg" class="btn" title="Export SVG"><i class="fas fa-file-export"></i></button>
+                <button id="clean-svg" class="btn" title="Clean SVG"><i class="fas fa-broom"></i></button>
+            </div>
+        </header>
+        
+        <main class="app-main">
+            <div class="sidebar left-sidebar">
+                <div class="tools-panel">
+                    <h3>Tools</h3>
+                    <div class="tool-buttons">
+                        <button id="select-tool" class="tool-btn active" title="Select"><i class="fas fa-mouse-pointer"></i></button>
+                        <button id="rect-tool" class="tool-btn" title="Rectangle"><i class="far fa-square"></i></button>
+                        <button id="circle-tool" class="tool-btn" title="Circle"><i class="far fa-circle"></i></button>
+                        <button id="line-tool" class="tool-btn" title="Line"><i class="fas fa-slash"></i></button>
+                        <button id="path-tool" class="tool-btn" title="Path"><i class="fas fa-pen"></i></button>
+                        <button id="text-tool" class="tool-btn" title="Text"><i class="fas fa-font"></i></button>
+                    </div>
+                </div>
+                <div class="layers-panel">
+                    <h3>Layers</h3>
+                    <div id="layers-container" class="layers-container">
+                        <!-- Layers will be added dynamically -->
+                    </div>
+                </div>
+            </div>
+            
+            <div class="canvas-container">
+                <div class="canvas-controls">
+                    <div class="zoom-controls">
+                        <button id="zoom-out" class="btn" title="Zoom Out"><i class="fas fa-search-minus"></i></button>
+                        <span id="zoom-level">100%</span>
+                        <button id="zoom-in" class="btn" title="Zoom In"><i class="fas fa-search-plus"></i></button>
+                    </div>
+                    <div class="view-controls">
+                        <button id="toggle-grid" class="btn" title="Toggle Grid"><i class="fas fa-border-all"></i></button>
+                        <button id="toggle-rulers" class="btn" title="Toggle Rulers"><i class="fas fa-ruler-combined"></i></button>
+                    </div>
+                </div>
+                <div id="canvas-wrapper" class="canvas-wrapper">
+                    <svg id="svg-canvas" width="800" height="600" xmlns="http://www.w3.org/2000/svg">
+                        <!-- SVG content will be rendered here -->
+                    </svg>
+                </div>
+            </div>
+            
+            <div class="sidebar right-sidebar">
+                <div class="properties-panel">
+                    <h3>Properties</h3>
+                    <div id="properties-container" class="properties-container">
+                        <div class="no-selection-message">
+                            <p>Select an element to edit its properties</p>
+                        </div>
+                        <!-- Properties will be added dynamically based on selection -->
+                    </div>
+                </div>
+                <div class="code-panel">
+                    <h3>SVG Code</h3>
+                    <div class="code-actions">
+                        <button id="format-code" class="btn small" title="Format Code"><i class="fas fa-code"></i></button>
+                        <button id="copy-code" class="btn small" title="Copy Code"><i class="far fa-copy"></i></button>
+                    </div>
+                    <div class="code-editor-container">
+                        <textarea id="svg-code" spellcheck="false"></textarea>
+                    </div>
+                </div>
+            </div>
+        </main>
+        
+        <footer class="app-footer">
+            <div class="status-bar">
+                <span id="cursor-position">X: 0 Y: 0</span>
+                <span id="canvas-size">800 × 600</span>
+            </div>
+            <div class="app-info">
+                <span>SVG Builder v1.0</span>
+            </div>
+        </footer>
+    </div>
+
+    <!-- Modal templates -->
+    <div id="modal-container" class="modal-container hidden">
+        <div class="modal-backdrop"></div>
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2 id="modal-title">Modal Title</h2>
+                <button id="modal-close" class="btn icon-btn"><i class="fas fa-times"></i></button>
+            </div>
+            <div id="modal-body" class="modal-body">
+                <!-- Modal content will be added dynamically -->
+            </div>
+            <div class="modal-footer">
+                <button id="modal-cancel" class="btn secondary">Cancel</button>
+                <button id="modal-confirm" class="btn primary">Confirm</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- File input for opening SVG files (hidden) -->
+    <input type="file" id="file-input" accept=".svg" style="display: none;">
+
+    <!-- Scripts -->
+    <script src="src/js/utils.js"></script>
+    <script src="src/js/svgParser.js"></script>
+    <script src="src/js/svgCleaner.js"></script>
+    <script src="src/js/tools.js"></script>
+    <script src="src/js/properties.js"></script>
+    <script src="src/js/layers.js"></script>
+    <script src="src/js/ui.js"></script>
+    <script src="src/js/app.js"></script>
+</body>
+</html> 
