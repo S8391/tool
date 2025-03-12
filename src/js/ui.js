@@ -60,6 +60,34 @@ const UI = {
     },
     
     /**
+     * Show a modal dialog
+     * @param {string} title - The title of the modal
+     * @param {string|Node} content - The content to display (HTML string or DOM node)
+     * @param {Function} callback - The callback function to execute when confirmed
+     */
+    showModal: (title, content, callback) => {
+        UI.modalTitle.textContent = title;
+        
+        // Clear previous content
+        while (UI.modalBody.firstChild) {
+            UI.modalBody.removeChild(UI.modalBody.firstChild);
+        }
+        
+        // Add new content
+        if (typeof content === 'string') {
+            UI.modalBody.innerHTML = content;
+        } else {
+            UI.modalBody.appendChild(content);
+        }
+        
+        // Set callback
+        UI.modalCallback = callback;
+        
+        // Show the modal
+        UI.modalContainer.classList.remove('hidden');
+    },
+    
+    /**
      * Set up toolbar button event listeners
      */
     setupToolbarEventListeners: () => {
@@ -86,6 +114,44 @@ const UI = {
         
         // File input for opening SVG
         document.getElementById('file-input').addEventListener('change', UI.handleFileInputChange);
+    },
+    
+    /**
+     * Set up canvas control listeners
+     */
+    setupCanvasControlListeners: () => {
+        // Zoom controls
+        document.getElementById('zoom-in').addEventListener('click', UI.handleZoomIn);
+        document.getElementById('zoom-out').addEventListener('click', UI.handleZoomOut);
+        
+        // View controls
+        document.getElementById('toggle-grid').addEventListener('click', UI.handleToggleGrid);
+        document.getElementById('toggle-rulers').addEventListener('click', UI.handleToggleRulers);
+    },
+    
+    /**
+     * Set up code panel listeners
+     */
+    setupCodePanelListeners: () => {
+        // Format code button
+        document.getElementById('format-code').addEventListener('click', () => {
+            UI.updateSvgCode(); // Re-format the code
+        });
+        
+        // Copy code button
+        document.getElementById('copy-code').addEventListener('click', () => {
+            const codeTextarea = document.getElementById('svg-code');
+            codeTextarea.select();
+            document.execCommand('copy');
+            
+            // Show a temporary success message
+            const copyBtn = document.getElementById('copy-code');
+            const originalHTML = copyBtn.innerHTML;
+            copyBtn.innerHTML = '<i class="fas fa-check"></i>';
+            setTimeout(() => {
+                copyBtn.innerHTML = originalHTML;
+            }, 1500);
+        });
     },
     
     /**
@@ -686,36 +752,63 @@ const UI = {
     handleConvertScore: () => {
         const svgCanvas = document.getElementById('svg-canvas');
         
-        // Check if this is a music score
-        const hasMeasures = svgCanvas.querySelectorAll('g[id^="measure-"]').length > 0;
+        // Check if this is a music score using the dedicated function
+        if (!MusicXmlParser.isMusicScore(svgCanvas)) {
+            UI.showModal('Not a Music Score', 
+                '<p>The current SVG does not appear to be a music score. Please import a MusicXML file first.</p>', 
+                null);
+            return;
+        }
         
-        if (!hasMeasures) {
-            alert('No music score detected. Please import a MusicXML file first.');
+        // Check current format - don't convert if already continuous
+        if (svgCanvas.getAttribute('data-format') === 'continuous') {
+            UI.showModal('Already Continuous', 
+                '<p>The score is already in continuous format.</p>', 
+                null);
             return;
         }
         
         try {
-            // Convert the score
-            const continuousSvg = MusicXmlParser.convertToContinuousScore(svgCanvas);
+            // Show loading modal
+            UI.showModal('Converting Score', 
+                '<p>Converting music score to continuous format...</p>', 
+                null);
             
-            // Replace current SVG content
-            svgCanvas.innerHTML = '';
-            
-            // Copy attributes from the generated SVG
-            Array.from(continuousSvg.attributes).forEach(attr => {
-                svgCanvas.setAttribute(attr.name, attr.value);
-            });
-            
-            // Copy all child nodes
-            Array.from(continuousSvg.childNodes).forEach(node => {
-                svgCanvas.appendChild(node.cloneNode(true));
-            });
-            
-            // Update UI
-            UI.updateLayers();
-            UI.updateSvgCode();
+            // Use setTimeout to allow the UI to update before processing
+            setTimeout(() => {
+                // Convert the score
+                const continuousSvg = MusicXmlParser.convertToContinuousScore(svgCanvas);
+                
+                // Replace current SVG content
+                svgCanvas.innerHTML = '';
+                
+                // Copy attributes from the generated SVG
+                Array.from(continuousSvg.attributes).forEach(attr => {
+                    svgCanvas.setAttribute(attr.name, attr.value);
+                });
+                
+                // Copy all child nodes
+                Array.from(continuousSvg.childNodes).forEach(node => {
+                    svgCanvas.appendChild(node.cloneNode(true));
+                });
+                
+                // Update UI
+                UI.updateLayers();
+                UI.updateSvgCode();
+                
+                // Close the loading modal
+                UI.closeModal();
+                
+                // Show success message
+                UI.showModal('Conversion Complete', 
+                    '<p>Successfully converted to continuous score format.</p>', 
+                    null);
+            }, 100);
         } catch (error) {
-            alert('Error converting score: ' + error.message);
+            UI.closeModal();
+            UI.showModal('Error', 
+                `<p>Error converting score: ${error.message}</p>`, 
+                null);
         }
     },
     

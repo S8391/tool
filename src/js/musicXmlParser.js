@@ -53,6 +53,8 @@ const MusicXmlParser = {
         svg.setAttribute('width', '100%');
         svg.setAttribute('height', '100%');
         svg.setAttribute('viewBox', '0 0 1200 800');
+        svg.setAttribute('data-type', 'music-score');
+        svg.setAttribute('data-format', 'segmented');
         
         // Extract basic information from MusicXML
         const title = xmlDoc.querySelector('work-title')?.textContent || 'Untitled Score';
@@ -65,6 +67,7 @@ const MusicXmlParser = {
         titleElement.setAttribute('text-anchor', 'middle');
         titleElement.setAttribute('font-size', '24');
         titleElement.setAttribute('font-weight', 'bold');
+        titleElement.setAttribute('data-role', 'title');
         titleElement.textContent = title;
         svg.appendChild(titleElement);
         
@@ -73,6 +76,7 @@ const MusicXmlParser = {
         composerElement.setAttribute('y', '80');
         composerElement.setAttribute('text-anchor', 'middle');
         composerElement.setAttribute('font-size', '16');
+        composerElement.setAttribute('data-role', 'composer');
         composerElement.textContent = composer;
         svg.appendChild(composerElement);
         
@@ -83,16 +87,20 @@ const MusicXmlParser = {
         parts.forEach((part, partIndex) => {
             const partGroup = document.createElementNS('http://www.w3.org/2000/svg', 'g');
             partGroup.setAttribute('id', `part-${partIndex}`);
+            partGroup.setAttribute('data-part-index', partIndex.toString());
             partGroup.setAttribute('transform', `translate(100, ${yOffset})`);
             
             // Handle measures
             const measures = part.querySelectorAll('measure');
             let xOffset = 0;
             const measureWidth = 200;
+            let currentLine = 0;
             
             measures.forEach((measure, measureIndex) => {
                 const measureGroup = document.createElementNS('http://www.w3.org/2000/svg', 'g');
                 measureGroup.setAttribute('id', `measure-${partIndex}-${measureIndex}`);
+                measureGroup.setAttribute('data-measure-index', measureIndex.toString());
+                measureGroup.setAttribute('data-line', currentLine.toString());
                 measureGroup.setAttribute('transform', `translate(${xOffset}, 0)`);
                 
                 // Draw staff lines
@@ -104,6 +112,7 @@ const MusicXmlParser = {
                     staffLine.setAttribute('y2', i * 10);
                     staffLine.setAttribute('stroke', 'black');
                     staffLine.setAttribute('stroke-width', '1');
+                    staffLine.setAttribute('data-type', 'staff-line');
                     measureGroup.appendChild(staffLine);
                 }
                 
@@ -112,6 +121,7 @@ const MusicXmlParser = {
                 measureNumberText.setAttribute('x', '5');
                 measureNumberText.setAttribute('y', '-5');
                 measureNumberText.setAttribute('font-size', '10');
+                measureNumberText.setAttribute('data-type', 'measure-number');
                 measureNumberText.textContent = measureIndex + 1;
                 measureGroup.appendChild(measureNumberText);
                 
@@ -130,6 +140,7 @@ const MusicXmlParser = {
                         restSymbol.setAttribute('y', '20');
                         restSymbol.setAttribute('font-family', 'serif');
                         restSymbol.setAttribute('font-size', '24');
+                        restSymbol.setAttribute('data-type', 'rest');
                         restSymbol.textContent = '𝄽'; // Rest symbol
                         measureGroup.appendChild(restSymbol);
                     } else {
@@ -150,6 +161,9 @@ const MusicXmlParser = {
                         noteHead.setAttribute('rx', '6');
                         noteHead.setAttribute('ry', '4');
                         noteHead.setAttribute('fill', 'black');
+                        noteHead.setAttribute('data-type', 'note-head');
+                        noteHead.setAttribute('data-pitch', step);
+                        noteHead.setAttribute('data-octave', octave.toString());
                         measureGroup.appendChild(noteHead);
                         
                         // Draw stem
@@ -160,6 +174,7 @@ const MusicXmlParser = {
                         stem.setAttribute('y2', yPosition - 30);
                         stem.setAttribute('stroke', 'black');
                         stem.setAttribute('stroke-width', '1');
+                        stem.setAttribute('data-type', 'stem');
                         measureGroup.appendChild(stem);
                     }
                     
@@ -172,8 +187,9 @@ const MusicXmlParser = {
                 // If we've reached the edge of our SVG, move to next line
                 if (xOffset > 1000 && measureIndex < measures.length - 1) {
                     xOffset = 0;
+                    currentLine++;
                     yOffset += 100;
-                    partGroup.setAttribute('transform', `translate(100, ${yOffset})`);
+                    // We don't adjust the partGroup transform here, as that would affect all measures
                 }
             });
             
@@ -194,50 +210,65 @@ const MusicXmlParser = {
         const newSvg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
         newSvg.setAttribute('width', '100%');
         newSvg.setAttribute('height', '100%');
+        newSvg.setAttribute('data-type', 'music-score');
+        newSvg.setAttribute('data-format', 'continuous');
         
         // Clone the original SVG to work with
         const clonedSvg = svgElement.cloneNode(true);
         
-        // Find all measure groups in the original SVG
+        // Find all part groups in the original SVG
         const partGroups = Array.from(clonedSvg.querySelectorAll('g[id^="part-"]'));
-        const allMeasures = [];
         
-        // Extract all measures from all parts
-        partGroups.forEach(partGroup => {
+        // Process each part
+        partGroups.forEach((partGroup, partIndex) => {
+            // Get all measures in this part
             const measures = Array.from(partGroup.querySelectorAll('g[id^="measure-"]'));
-            allMeasures.push(...measures);
+            
+            // Sort measures by their index
+            measures.sort((a, b) => {
+                const aIndex = parseInt(a.getAttribute('data-measure-index') || '0');
+                const bIndex = parseInt(b.getAttribute('data-measure-index') || '0');
+                return aIndex - bIndex;
+            });
+            
+            // Create a new group for the continuous part
+            const continuousPartGroup = document.createElementNS('http://www.w3.org/2000/svg', 'g');
+            continuousPartGroup.setAttribute('id', `continuous-part-${partIndex}`);
+            continuousPartGroup.setAttribute('transform', `translate(50, ${150 + partIndex * 150})`);
+            
+            // Arrange measures in a continuous line
+            let xOffset = 0;
+            const measureWidth = 200;
+            
+            measures.forEach((measure, index) => {
+                const clonedMeasure = measure.cloneNode(true);
+                clonedMeasure.setAttribute('transform', `translate(${xOffset}, 0)`);
+                
+                // Update measure number if needed
+                const measureNumber = clonedMeasure.querySelector('text[data-type="measure-number"]');
+                if (measureNumber) {
+                    measureNumber.textContent = (index + 1).toString();
+                }
+                
+                continuousPartGroup.appendChild(clonedMeasure);
+                xOffset += measureWidth;
+            });
+            
+            newSvg.appendChild(continuousPartGroup);
         });
         
-        // Sort measures by their index
-        allMeasures.sort((a, b) => {
-            const aIndex = parseInt(a.id.split('-')[2]);
-            const bIndex = parseInt(b.id.split('-')[2]);
-            return aIndex - bIndex;
-        });
-        
-        // Create a new group for the continuous score
-        const continuousGroup = document.createElementNS('http://www.w3.org/2000/svg', 'g');
-        continuousGroup.setAttribute('id', 'continuous-score');
-        continuousGroup.setAttribute('transform', 'translate(100, 150)');
-        
-        // Arrange measures in a continuous line
-        let xOffset = 0;
-        const measureWidth = 200;
-        
-        allMeasures.forEach((measure, index) => {
-            const clonedMeasure = measure.cloneNode(true);
-            clonedMeasure.setAttribute('transform', `translate(${xOffset}, 0)`);
-            continuousGroup.appendChild(clonedMeasure);
-            xOffset += measureWidth;
-        });
+        // Calculate total width needed
+        const maxMeasures = Math.max(...partGroups.map(part => 
+            part.querySelectorAll('g[id^="measure-"]').length
+        ));
+        const totalWidth = maxMeasures * 200 + 100; // Add padding
         
         // Set appropriate viewBox for the new SVG
-        const totalWidth = xOffset + 200; // Add some padding
-        newSvg.setAttribute('viewBox', `0 0 ${totalWidth} 400`);
+        newSvg.setAttribute('viewBox', `0 0 ${totalWidth} ${150 + partGroups.length * 150 + 50}`);
         
         // Copy title and composer if present
-        const title = clonedSvg.querySelector('text[font-weight="bold"]');
-        const composer = title?.nextElementSibling;
+        const title = svgElement.querySelector('text[data-role="title"]');
+        const composer = svgElement.querySelector('text[data-role="composer"]');
         
         if (title) {
             const newTitle = title.cloneNode(true);
@@ -251,8 +282,23 @@ const MusicXmlParser = {
             newSvg.appendChild(newComposer);
         }
         
-        newSvg.appendChild(continuousGroup);
         return newSvg;
+    },
+    
+    /**
+     * Determine if an SVG contains a music score
+     * @param {SVGElement} svgElement - The SVG element to check
+     * @returns {boolean} True if the SVG contains a music score
+     */
+    isMusicScore: (svgElement) => {
+        // Check for specific music score elements
+        return (
+            svgElement.getAttribute('data-type') === 'music-score' ||
+            svgElement.querySelectorAll('g[id^="part-"]').length > 0 ||
+            svgElement.querySelectorAll('g[id^="measure-"]').length > 0 ||
+            svgElement.querySelectorAll('line[data-type="staff-line"]').length > 0 ||
+            svgElement.querySelectorAll('ellipse[data-type="note-head"]').length > 0
+        );
     }
 };
 
