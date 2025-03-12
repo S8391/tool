@@ -752,62 +752,77 @@ const UI = {
     handleConvertScore: () => {
         const svgCanvas = document.getElementById('svg-canvas');
         
-        // Check if this is a music score using the dedicated function
-        if (!MusicXmlParser.isMusicScore(svgCanvas)) {
-            UI.showModal('Not a Music Score', 
-                '<p>The current SVG does not appear to be a music score. Please import a MusicXML file first.</p>', 
-                null);
-            return;
-        }
-        
-        // Check current format - don't convert if already continuous
-        if (svgCanvas.getAttribute('data-format') === 'continuous') {
-            UI.showModal('Already Continuous', 
-                '<p>The score is already in continuous format.</p>', 
-                null);
-            return;
-        }
-        
         try {
             // Show loading modal
-            UI.showModal('Converting Score', 
-                '<p>Converting music score to continuous format...</p>', 
+            UI.showModal('Converting Layout', 
+                '<p>Converting to continuous layout...</p>', 
                 null);
             
             // Use setTimeout to allow the UI to update before processing
             setTimeout(() => {
-                // Convert the score
-                const continuousSvg = MusicXmlParser.convertToContinuousScore(svgCanvas);
-                
-                // Replace current SVG content
-                svgCanvas.innerHTML = '';
-                
-                // Copy attributes from the generated SVG
-                Array.from(continuousSvg.attributes).forEach(attr => {
-                    svgCanvas.setAttribute(attr.name, attr.value);
-                });
-                
-                // Copy all child nodes
-                Array.from(continuousSvg.childNodes).forEach(node => {
-                    svgCanvas.appendChild(node.cloneNode(true));
-                });
-                
-                // Update UI
-                UI.updateLayers();
-                UI.updateSvgCode();
-                
-                // Close the loading modal
+                // First, ask the user for the number of lines
                 UI.closeModal();
                 
-                // Show success message
-                UI.showModal('Conversion Complete', 
-                    '<p>Successfully converted to continuous score format.</p>', 
-                    null);
+                UI.showModal('Continuous Layout Options',
+                    `
+                    <div class="form-group">
+                        <label for="num-lines">Number of lines:</label>
+                        <select id="num-lines">
+                            <option value="2">2 lines</option>
+                            <option value="3">3 lines</option>
+                        </select>
+                    </div>
+                    `,
+                    () => {
+                        const numLines = parseInt(document.getElementById('num-lines').value);
+                        
+                        // Show processing modal
+                        UI.showModal('Processing', '<p>Arranging elements into continuous layout...</p>', null);
+                        
+                        // Use setTimeout to allow the UI to update
+                        setTimeout(() => {
+                            try {
+                                // Convert to continuous layout using our new function
+                                const continuousSvg = UI.convertToContinuousLayout(svgCanvas, numLines);
+                                
+                                // Replace current SVG content
+                                svgCanvas.innerHTML = '';
+                                
+                                // Copy attributes from the generated SVG
+                                Array.from(continuousSvg.attributes).forEach(attr => {
+                                    svgCanvas.setAttribute(attr.name, attr.value);
+                                });
+                                
+                                // Copy all child nodes
+                                Array.from(continuousSvg.childNodes).forEach(node => {
+                                    svgCanvas.appendChild(node.cloneNode(true));
+                                });
+                                
+                                // Update UI
+                                UI.updateLayers();
+                                UI.updateSvgCode();
+                                
+                                // Close the loading modal
+                                UI.closeModal();
+                                
+                                // Show success message
+                                UI.showModal('Conversion Complete', 
+                                    '<p>Successfully converted to continuous layout.</p>', 
+                                    null);
+                            } catch (error) {
+                                UI.closeModal();
+                                UI.showModal('Error', 
+                                    `<p>Error converting layout: ${error.message}</p>`, 
+                                    null);
+                            }
+                        }, 100);
+                    }
+                );
             }, 100);
         } catch (error) {
             UI.closeModal();
             UI.showModal('Error', 
-                `<p>Error converting score: ${error.message}</p>`, 
+                `<p>Error converting layout: ${error.message}</p>`, 
                 null);
         }
     },
@@ -1030,6 +1045,161 @@ const UI = {
         }
         
         return formatted;
+    },
+
+    /**
+     * Convert SVG elements to a continuous layout arrangement
+     * @param {SVGElement} svgElement - The SVG element to convert
+     * @param {number} numLines - Number of lines to arrange content into (2 or 3)
+     * @returns {SVGElement} A new SVG element with continuous layout
+     */
+    convertToContinuousLayout: (svgElement, numLines = 2) => {
+        // Clone the original SVG to avoid modifying it directly
+        const clonedSvg = svgElement.cloneNode(true);
+        
+        // Create a new SVG element for the continuous layout
+        const newSvg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+        
+        // Get all top-level elements
+        const elements = Array.from(clonedSvg.children);
+        
+        if (elements.length === 0) {
+            return clonedSvg; // Nothing to convert
+        }
+        
+        // Get original dimensions
+        const originalWidth = parseInt(clonedSvg.getAttribute('width') || 800);
+        const originalHeight = parseInt(clonedSvg.getAttribute('height') || 600);
+        
+        // Calculate dimensions for the new layout
+        const newWidth = originalWidth;
+        let totalHeight = 0;
+        
+        // Calculate bounding boxes for all elements
+        const elementInfo = elements.map(el => {
+            let bbox;
+            
+            // For groups, calculate bounding box of all children
+            if (el.tagName.toLowerCase() === 'g') {
+                // Find min/max coordinates of all child elements
+                let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+                
+                Array.from(el.querySelectorAll('*')).forEach(child => {
+                    // Skip elements without getBBox
+                    if (typeof child.getBBox !== 'function') return;
+                    
+                    try {
+                        const childBox = child.getBBox();
+                        minX = Math.min(minX, childBox.x);
+                        minY = Math.min(minY, childBox.y);
+                        maxX = Math.max(maxX, childBox.x + childBox.width);
+                        maxY = Math.max(maxY, childBox.y + childBox.height);
+                    } catch (e) {
+                        // Ignore elements that can't compute bounding box
+                    }
+                });
+                
+                // If valid bounds were found
+                if (minX !== Infinity && minY !== Infinity && maxX !== -Infinity && maxY !== -Infinity) {
+                    bbox = {
+                        x: minX,
+                        y: minY,
+                        width: maxX - minX,
+                        height: maxY - minY
+                    };
+                } else {
+                    // Fallback for groups with no valid children
+                    bbox = { x: 0, y: 0, width: 100, height: 100 };
+                }
+            } else {
+                // For regular elements, use getBBox if available
+                try {
+                    bbox = el.getBBox();
+                } catch (e) {
+                    // Fallback for elements that can't compute bounding box
+                    bbox = { 
+                        x: parseFloat(el.getAttribute('x') || 0),
+                        y: parseFloat(el.getAttribute('y') || 0),
+                        width: parseFloat(el.getAttribute('width') || 100),
+                        height: parseFloat(el.getAttribute('height') || 100)
+                    };
+                }
+            }
+            
+            return { element: el, bbox };
+        });
+        
+        // Sort elements by their y-position (top to bottom)
+        elementInfo.sort((a, b) => a.bbox.y - b.bbox.y);
+        
+        // Calculate total height and line height
+        const lineHeight = Math.max(...elementInfo.map(info => info.bbox.height));
+        const padding = lineHeight * 0.2; // 20% padding between lines
+        
+        // Organize elements into lines
+        const lines = [];
+        for (let i = 0; i < numLines; i++) {
+            lines.push([]);
+        }
+        
+        // Distribute elements evenly across lines
+        elementInfo.forEach((info, index) => {
+            const lineIndex = index % numLines;
+            lines[lineIndex].push(info);
+        });
+        
+        // Calculate new total height
+        totalHeight = (lineHeight + padding) * numLines;
+        
+        // Set attributes for the new SVG
+        newSvg.setAttribute('width', newWidth.toString());
+        newSvg.setAttribute('height', totalHeight.toString());
+        newSvg.setAttribute('viewBox', `0 0 ${newWidth} ${totalHeight}`);
+        newSvg.setAttribute('data-format', 'continuous');
+        
+        // Copy other attributes from the original SVG
+        Array.from(clonedSvg.attributes).forEach(attr => {
+            if (!['width', 'height', 'viewBox'].includes(attr.name)) {
+                newSvg.setAttribute(attr.name, attr.value);
+            }
+        });
+        
+        // Position elements in their new locations
+        lines.forEach((line, lineIndex) => {
+            // Sort elements in this line by x-position (left to right)
+            line.sort((a, b) => a.bbox.x - b.bbox.x);
+            
+            // Position each element in the line
+            let currentX = 0;
+            line.forEach(info => {
+                const el = info.element;
+                const bbox = info.bbox;
+                
+                // Create a group for this element if not already a group
+                let elementGroup;
+                if (el.tagName.toLowerCase() === 'g') {
+                    elementGroup = el;
+                } else {
+                    elementGroup = document.createElementNS('http://www.w3.org/2000/svg', 'g');
+                    elementGroup.appendChild(el.cloneNode(true));
+                }
+                
+                // Calculate translation
+                const translateX = currentX - bbox.x;
+                const translateY = (lineHeight + padding) * lineIndex - bbox.y;
+                
+                // Apply translation
+                elementGroup.setAttribute('transform', `translate(${translateX}, ${translateY})`);
+                
+                // Add to SVG
+                newSvg.appendChild(elementGroup);
+                
+                // Update current X position
+                currentX += bbox.width + padding;
+            });
+        });
+        
+        return newSvg;
     }
 };
 
