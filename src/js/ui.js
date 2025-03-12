@@ -158,7 +158,7 @@ const UI = {
      * Handle new SVG button click
      */
     handleNewSvg: () => {
-        Utils.showModal(
+        UI.showModal(
             'New SVG',
             `
                 <div class="form-group">
@@ -188,10 +188,10 @@ const UI = {
                 Tools.init(newSvg);
                 
                 // Update SVG code
-                App.updateSvgCode();
+                UI.updateSvgCode();
                 
                 // Update layers
-                App.updateLayers();
+                UI.updateLayers();
                 
                 // Update canvas size in status bar
                 document.getElementById('canvas-size').textContent = `${width} × ${height}`;
@@ -216,7 +216,7 @@ const UI = {
         
         // Check if it's an SVG file
         if (!file.name.toLowerCase().endsWith('.svg')) {
-            Utils.showModal('Error', 'Please select an SVG file.', null);
+            UI.showModal('Error', 'Please select an SVG file.', null);
             return;
         }
         
@@ -247,16 +247,16 @@ const UI = {
                 Tools.init(svgElement);
                 
                 // Update SVG code
-                App.updateSvgCode();
+                UI.updateSvgCode();
                 
                 // Update layers
-                App.updateLayers();
+                UI.updateLayers();
                 
                 // Update canvas size in status bar
                 document.getElementById('canvas-size').textContent = `${width} × ${height}`;
             })
             .catch(error => {
-                Utils.showModal('Error', `Failed to load SVG file: ${error.message}`, null);
+                UI.showModal('Error', `Failed to load SVG file: ${error.message}`, null);
             });
         
         // Reset the file input
@@ -270,14 +270,14 @@ const UI = {
         const svgCanvas = document.getElementById('svg-canvas');
         const svgString = SvgParser.svgToString(svgCanvas);
         
-        Utils.downloadFile(svgString, 'svg-builder.svg', 'image/svg+xml');
+        UI.downloadFile(svgString, 'svg-builder.svg', 'image/svg+xml');
     },
     
     /**
      * Handle export SVG button click
      */
     handleExportSvg: () => {
-        Utils.showModal(
+        UI.showModal(
             'Export SVG',
             `
                 <div class="form-group">
@@ -301,7 +301,7 @@ const UI = {
                     const svgCanvas = document.getElementById('svg-canvas');
                     const svgString = SvgParser.svgToString(svgCanvas);
                     
-                    Utils.downloadFile(svgString, `${filename}.svg`, 'image/svg+xml');
+                    UI.downloadFile(svgString, `${filename}.svg`, 'image/svg+xml');
                 } else if (format === 'png') {
                     // Export as PNG
                     UI.exportAsPng(filename);
@@ -345,12 +345,12 @@ const UI = {
                 a.download = `${filename}.png`;
                 a.click();
             } catch (error) {
-                Utils.showModal('Error', `Failed to export as PNG: ${error.message}`, null);
+                UI.showModal('Error', `Failed to export as PNG: ${error.message}`, null);
             }
         };
         
         img.onerror = () => {
-            Utils.showModal('Error', 'Failed to export as PNG', null);
+            UI.showModal('Error', 'Failed to export as PNG', null);
         };
         
         // Set the source of the image
@@ -390,13 +390,13 @@ const UI = {
         Tools.init(cleanedSvgElement);
         
         // Update SVG code
-        App.updateSvgCode();
+        UI.updateSvgCode();
         
         // Update layers
-        App.updateLayers();
+        UI.updateLayers();
         
         // Show success message
-        Utils.showModal('Success', 'SVG has been cleaned and optimized.', null);
+        UI.showModal('Success', 'SVG has been cleaned and optimized.', null);
     },
     
     /**
@@ -937,10 +937,99 @@ const UI = {
         const svgString = SvgParser.svgToString(svgCanvas);
         
         // Format the SVG string with indentation
-        const formattedSvg = Utils.formatXml(svgString);
+        const formattedSvg = UI.formatXml(svgString);
         
         // Update the textarea
         codeTextarea.value = formattedSvg;
+    },
+
+    /**
+     * Download a file to the user's device
+     * @param {string} content - The content of the file
+     * @param {string} filename - The name of the file
+     * @param {string} mimeType - The MIME type of the file
+     */
+    downloadFile: (content, filename, mimeType) => {
+        // Create a Blob from the content
+        const blob = new Blob([content], { type: mimeType });
+        
+        // Create a download link
+        const a = document.createElement('a');
+        a.href = URL.createObjectURL(blob);
+        a.download = filename;
+        
+        // Append the link to the body, click it, and remove it
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        
+        // Release the blob URL
+        URL.revokeObjectURL(a.href);
+    },
+
+    /**
+     * Format XML with indentation
+     * @param {string} xml - The XML string to format
+     * @returns {string} The formatted XML string
+     */
+    formatXml: (xml) => {
+        // Replace all self-closing tags properly
+        xml = xml.replace(/<([^\s>]+)([^>]*)\/>/g, '<$1$2></$1>');
+        
+        let formatted = '';
+        let indent = '';
+        
+        // Split the XML by tags
+        const nodes = xml.split(/(<\/?[^>]+>)/g);
+        
+        // Keep track of if we're in a text node
+        let isTextNode = false;
+        
+        for (let i = 0; i < nodes.length; i++) {
+            const node = nodes[i].trim();
+            
+            if (!node) continue;
+            
+            // Check if it's a closing tag
+            if (node.startsWith('</')) {
+                indent = indent.substring(2);
+                
+                if (!isTextNode) {
+                    formatted += indent;
+                }
+                
+                formatted += node;
+                isTextNode = false;
+            } 
+            // Check if it's an opening tag
+            else if (node.startsWith('<')) {
+                if (!isTextNode) {
+                    formatted += indent;
+                }
+                
+                formatted += node;
+                
+                // Don't increase indent for self-closing tags or processing instructions
+                if (!node.endsWith('/>') && !node.startsWith('<?') && !node.startsWith('<!')) {
+                    indent += '  ';
+                    isTextNode = true;
+                } else {
+                    isTextNode = false;
+                }
+            } 
+            // It's a text node
+            else {
+                formatted += node;
+                isTextNode = false;
+            }
+            
+            // Add a new line if not in a text node
+            if (!isTextNode) {
+                formatted += '\n';
+            }
+        }
+        
+        return formatted;
     }
 };
 
