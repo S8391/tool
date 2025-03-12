@@ -1072,9 +1072,127 @@ const UI = {
         const originalHeight = parseInt(clonedSvg.getAttribute('height') || 600);
         
         // Calculate dimensions for the new layout
-        const newWidth = originalWidth;
+        const newWidth = originalWidth * 2; // Make it wider for continuous display
         let totalHeight = 0;
         
+        // First, try to detect if this is a music score
+        const isMusicScore = elements.some(el => {
+            // Check for common music notation elements
+            const isGroup = el.tagName.toLowerCase() === 'g';
+            if (!isGroup) return false;
+            
+            // Look for clefs, staff lines, or music text elements
+            const hasStaffLines = el.querySelector('path[d*="M"][d*="H"]') !== null;
+            const hasClef = el.querySelector('path[d*="C"][d*="A"][d*="Z"]') !== null;
+            const hasNotes = el.querySelector('ellipse, circle') !== null;
+            
+            return hasStaffLines || hasClef || hasNotes;
+        });
+        
+        if (isMusicScore) {
+            // For music scores, detect systems (groups of staves)
+            let systems = [];
+            let currentSystem = [];
+            let lastY = -1;
+            
+            // Sort all elements by Y position first
+            const sortedElements = [...elements].sort((a, b) => {
+                const aY = parseFloat(a.getAttribute('transform')?.match(/translate\([^,]+,\s*([^)]+)\)/)?.at(1) || 0);
+                const bY = parseFloat(b.getAttribute('transform')?.match(/translate\([^,]+,\s*([^)]+)\)/)?.at(1) || 0);
+                return aY - bY;
+            });
+            
+            // Group elements into systems based on vertical proximity
+            sortedElements.forEach((el, index) => {
+                const transform = el.getAttribute('transform');
+                const yMatch = transform?.match(/translate\([^,]+,\s*([^)]+)\)/);
+                const y = parseFloat(yMatch?.at(1) || index * 100);
+                
+                // If this element is far from the last one, it's likely a new system
+                if (lastY >= 0 && Math.abs(y - lastY) > 80) {
+                    systems.push([...currentSystem]);
+                    currentSystem = [];
+                }
+                
+                currentSystem.push(el);
+                lastY = y;
+            });
+            
+            // Don't forget the last system
+            if (currentSystem.length > 0) {
+                systems.push(currentSystem);
+            }
+            
+            // If we couldn't detect systems properly, fallback to treating each element as its own system
+            if (systems.length === 0) {
+                systems = elements.map(el => [el]);
+            }
+            
+            // Consolidate the systems into the requested number of lines
+            const consolidatedSystems = [];
+            for (let i = 0; i < numLines; i++) {
+                consolidatedSystems.push([]);
+            }
+            
+            // Distribute systems across the requested number of lines
+            systems.forEach((system, index) => {
+                const lineIndex = index % numLines;
+                consolidatedSystems[lineIndex].push(...system);
+            });
+            
+            // Calculate the height needed for each consolidated system
+            const lineHeight = originalHeight / systems.length;
+            totalHeight = lineHeight * numLines;
+            
+            // Set attributes for the new SVG
+            newSvg.setAttribute('width', newWidth.toString());
+            newSvg.setAttribute('height', totalHeight.toString());
+            newSvg.setAttribute('viewBox', `0 0 ${newWidth} ${totalHeight}`);
+            newSvg.setAttribute('data-format', 'continuous');
+            
+            // Copy other attributes from the original SVG
+            Array.from(clonedSvg.attributes).forEach(attr => {
+                if (!['width', 'height', 'viewBox'].includes(attr.name)) {
+                    newSvg.setAttribute(attr.name, attr.value);
+                }
+            });
+            
+            // Position systems in their new locations
+            consolidatedSystems.forEach((lineElements, lineIndex) => {
+                let currentX = 0;
+                
+                lineElements.forEach(el => {
+                    // Create a clone of the element
+                    const clone = el.cloneNode(true);
+                    
+                    // Get original transform
+                    let transformX = 0;
+                    let transformY = 0;
+                    const transform = clone.getAttribute('transform');
+                    
+                    if (transform) {
+                        const matches = transform.match(/translate\(([^,]+),\s*([^)]+)\)/);
+                        if (matches) {
+                            transformX = parseFloat(matches[1]);
+                            transformY = parseFloat(matches[2]);
+                        }
+                    }
+                    
+                    // Update transform to position in the new layout
+                    clone.setAttribute('transform', `translate(${currentX}, ${lineIndex * lineHeight})`);
+                    
+                    // Add to SVG
+                    newSvg.appendChild(clone);
+                    
+                    // Update current X position - each system takes original width
+                    currentX += originalWidth / systems.length;
+                });
+            });
+            
+            return newSvg;
+        }
+        
+        // Non-music score handling (original implementation)
         // Calculate bounding boxes for all elements
         const elementInfo = elements.map(el => {
             let bbox;
