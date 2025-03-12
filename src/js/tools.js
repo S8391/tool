@@ -25,6 +25,9 @@ const Tools = {
     // Resize handles
     resizeHandles: [],
     
+    // For freehand drawing
+    pathPoints: [],
+    
     /**
      * Initialize tools
      * @param {SVGElement} svgCanvas - The SVG canvas element
@@ -107,7 +110,13 @@ const Tools = {
                 Tools.startPath(position);
                 break;
             case 'text':
-                Tools.startText(position);
+                Tools.createText(position);
+                break;
+            case 'freehand':
+                Tools.startFreehand(position);
+                break;
+            case 'eraser':
+                Tools.eraseElement(position);
                 break;
         }
     },
@@ -123,7 +132,7 @@ const Tools = {
         
         switch (Tools.activeTool) {
             case 'select':
-                Tools.handleSelectMove(position);
+                Tools.moveSelected(position);
                 break;
             case 'rect':
                 Tools.updateRectangle(position);
@@ -137,6 +146,12 @@ const Tools = {
             case 'path':
                 Tools.updatePath(position);
                 break;
+            case 'freehand':
+                Tools.continueFreehand(position);
+                break;
+            case 'eraser':
+                Tools.eraseElement(position);
+                break;
         }
     },
     
@@ -147,28 +162,28 @@ const Tools = {
     handleMouseUp: (event) => {
         if (!Tools.isDragging) return;
         
-        const position = Utils.getMousePosition(event, Tools.svgCanvas);
-        
         switch (Tools.activeTool) {
             case 'select':
-                Tools.handleSelectEnd(position);
+                Tools.endMove();
                 break;
             case 'rect':
-                Tools.finishRectangle(position);
+                Tools.finishRectangle();
                 break;
             case 'circle':
-                Tools.finishCircle(position);
+                Tools.finishCircle();
                 break;
             case 'line':
-                Tools.finishLine(position);
+                Tools.finishLine();
                 break;
             case 'path':
-                Tools.finishPath(position);
+                Tools.finishPath();
+                break;
+            case 'freehand':
+                Tools.endFreehand();
                 break;
         }
         
         Tools.isDragging = false;
-        Tools.currentElement = null;
     },
     
     /**
@@ -177,26 +192,27 @@ const Tools = {
      */
     handleKeyDown: (event) => {
         // Delete selected element
-        if (event.key === 'Delete' && Tools.selectedElement) {
-            SvgParser.removeElement(Tools.selectedElement);
-            Tools.clearSelection();
-            App.updateSvgCode();
-            App.updateLayers();
+        if ((event.key === 'Delete' || event.key === 'Backspace') && Tools.selectedElement) {
+            Tools.deleteSelected();
+            event.preventDefault();
         }
         
-        // Copy selected element
-        if (event.key === 'c' && event.ctrlKey && Tools.selectedElement) {
-            const clone = SvgParser.cloneElement(Tools.selectedElement);
-            clone.id = Utils.generateId();
-            
-            // Offset the clone slightly
-            const transform = clone.getAttribute('transform') || '';
-            clone.setAttribute('transform', transform + ' translate(10, 10)');
-            
-            Tools.svgCanvas.appendChild(clone);
-            Tools.selectElement(clone);
-            App.updateSvgCode();
-            App.updateLayers();
+        // Copy with Ctrl+C
+        if (event.key === 'c' && (event.ctrlKey || event.metaKey) && Tools.selectedElement) {
+            Tools.copySelected();
+            event.preventDefault();
+        }
+        
+        // Cut with Ctrl+X
+        if (event.key === 'x' && (event.ctrlKey || event.metaKey) && Tools.selectedElement) {
+            Tools.cutSelected();
+            event.preventDefault();
+        }
+        
+        // Paste with Ctrl+V
+        if (event.key === 'v' && (event.ctrlKey || event.metaKey)) {
+            Tools.pasteSelected();
+            event.preventDefault();
         }
     },
     
@@ -616,7 +632,254 @@ const Tools = {
         Tools.selectElement(text);
         App.updateSvgCode();
         App.updateLayers();
+    },
+    
+    /**
+     * Start freehand drawing
+     * @param {Object} position - The starting position
+     */
+    startFreehand: (position) => {
+        // Reset path points
+        Tools.pathPoints = [position];
+        
+        // Create a new path element
+        const path = Utils.createSvgElement('path');
+        Utils.setSvgAttributes(path, {
+            d: `M ${position.x} ${position.y}`,
+            fill: 'none',
+            stroke: 'black',
+            'stroke-width': 2,
+            id: Utils.generateId()
+        });
+        
+        // Add the path to the canvas
+        Tools.svgCanvas.appendChild(path);
+        Tools.currentElement = path;
+        
+        // Start dragging
+        Tools.isDragging = true;
+    },
+    
+    /**
+     * Continue freehand drawing
+     * @param {Object} position - The current position
+     */
+    continueFreehand: (position) => {
+        if (!Tools.isDragging || !Tools.currentElement) return;
+        
+        // Add the new point
+        Tools.pathPoints.push(position);
+        
+        // Update the path data
+        const pathData = Tools.pathPoints.reduce((data, point, index) => {
+            return index === 0 ? 
+                `M ${point.x} ${point.y}` : 
+                `${data} L ${point.x} ${point.y}`;
+        }, '');
+        
+        // Update the path element
+        Tools.currentElement.setAttribute('d', pathData);
+    },
+    
+    /**
+     * End freehand drawing
+     */
+    endFreehand: () => {
+        if (!Tools.isDragging || !Tools.currentElement) return;
+        
+        // If we only have a few points, simplify to a line or remove
+        if (Tools.pathPoints.length < 3) {
+            if (Tools.pathPoints.length === 2) {
+                // Convert to a line
+                const start = Tools.pathPoints[0];
+                const end = Tools.pathPoints[1];
+                
+                const line = Utils.createSvgElement('line');
+                Utils.setSvgAttributes(line, {
+                    x1: start.x,
+                    y1: start.y,
+                    x2: end.x,
+                    y2: end.y,
+                    stroke: 'black',
+                    'stroke-width': 2,
+                    id: Utils.generateId()
+                });
+                
+                Tools.svgCanvas.replaceChild(line, Tools.currentElement);
+                Tools.currentElement = line;
+            } else {
+                // Remove the element if it's just a point
+                Tools.svgCanvas.removeChild(Tools.currentElement);
+                Tools.currentElement = null;
+            }
+        } else {
+            // Simplify the path if it has many points
+            if (Tools.pathPoints.length > 20) {
+                const simplifiedPoints = Utils.simplifyPath(Tools.pathPoints, 2);
+                
+                const pathData = simplifiedPoints.reduce((data, point, index) => {
+                    return index === 0 ? 
+                        `M ${point.x} ${point.y}` : 
+                        `${data} L ${point.x} ${point.y}`;
+                }, '');
+                
+                Tools.currentElement.setAttribute('d', pathData);
+            }
+        }
+        
+        // Reset state
+        Tools.isDragging = false;
+        if (Tools.currentElement) {
+            // Notify about the new element
+            UI.updateLayers();
+            UI.updateSvgCode();
+        }
+        Tools.currentElement = null;
+        Tools.pathPoints = [];
+    },
+    
+    /**
+     * Erase element at the given position
+     * @param {Object} position - The position
+     */
+    eraseElement: (position) => {
+        // Find the element under the cursor
+        const element = Utils.getElementAtPosition(Tools.svgCanvas, position);
+        
+        if (element && element !== Tools.svgCanvas) {
+            // Remove the element
+            element.parentNode.removeChild(element);
+            
+            // Update UI
+            Tools.clearSelection();
+            UI.updateLayers();
+            UI.updateSvgCode();
+        }
+    },
+    
+    /**
+     * Delete the selected element
+     */
+    deleteSelected: () => {
+        if (!Tools.selectedElement) return;
+        
+        // Remove the element
+        Tools.selectedElement.parentNode.removeChild(Tools.selectedElement);
+        
+        // Clear selection
+        Tools.clearSelection();
+        
+        // Update UI
+        UI.updateLayers();
+        UI.updateSvgCode();
+    },
+    
+    /**
+     * Copy the selected element
+     */
+    copySelected: () => {
+        if (!Tools.selectedElement) return;
+        
+        const clone = SvgParser.cloneElement(Tools.selectedElement);
+        clone.id = Utils.generateId();
+        
+        // Offset the clone slightly
+        const transform = clone.getAttribute('transform') || '';
+        clone.setAttribute('transform', transform + ' translate(10, 10)');
+        
+        Tools.svgCanvas.appendChild(clone);
+        Tools.selectElement(clone);
+        App.updateSvgCode();
+        App.updateLayers();
+    },
+    
+    /**
+     * Cut the selected element
+     */
+    cutSelected: () => {
+        if (!Tools.selectedElement) return;
+        
+        // Copy the selected element
+        Tools.copySelected();
+        
+        // Remove the selected element
+        Tools.deleteSelected();
+    },
+    
+    /**
+     * Paste the copied element
+     */
+    pasteSelected: () => {
+        if (!Tools.selectedElement) return;
+        
+        const clipboardData = document.getElementById('clipboard-data').value;
+        if (!clipboardData) return;
+        
+        const svgDoc = new DOMParser().parseFromString(clipboardData, 'image/svg+xml');
+        const pastedElement = svgDoc.documentElement;
+        
+        // Apply transform to pasted element
+        const transform = Tools.selectedElement.getAttribute('transform') || '';
+        pastedElement.setAttribute('transform', transform);
+        
+        // Add the pasted element to the canvas
+        Tools.svgCanvas.appendChild(pastedElement);
+        Tools.selectElement(pastedElement);
+        App.updateSvgCode();
+        App.updateLayers();
     }
+};
+
+// Add Utilities for path simplification
+Utils.distance = (p1, p2) => {
+    const dx = p2.x - p1.x;
+    const dy = p2.y - p1.y;
+    return Math.sqrt(dx * dx + dy * dy);
+};
+
+Utils.pointToLineDistance = (p, a, b) => {
+    const abx = b.x - a.x;
+    const aby = b.y - a.y;
+    const abLength = Math.sqrt(abx * abx + aby * aby);
+    
+    if (abLength === 0) return Utils.distance(p, a);
+    
+    const t = ((p.x - a.x) * abx + (p.y - a.y) * aby) / (abLength * abLength);
+    
+    if (t < 0) return Utils.distance(p, a);
+    if (t > 1) return Utils.distance(p, b);
+    
+    return Utils.distance(p, {
+        x: a.x + t * abx,
+        y: a.y + t * aby
+    });
+};
+
+Utils.simplifyPath = (points, tolerance) => {
+    if (points.length <= 2) return points;
+    
+    const simplifySection = (start, end) => {
+        let maxDistance = 0;
+        let maxIndex = 0;
+        
+        for (let i = start + 1; i < end; i++) {
+            const distance = Utils.pointToLineDistance(points[i], points[start], points[end]);
+            if (distance > maxDistance) {
+                maxDistance = distance;
+                maxIndex = i;
+            }
+        }
+        
+        if (maxDistance > tolerance) {
+            const firstPart = simplifySection(start, maxIndex);
+            const secondPart = simplifySection(maxIndex, end);
+            return [...firstPart.slice(0, -1), ...secondPart];
+        } else {
+            return [points[start], points[end]];
+        }
+    };
+    
+    return simplifySection(0, points.length - 1);
 };
 
 // Export the Tools object

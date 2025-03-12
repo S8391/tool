@@ -4,17 +4,65 @@
  */
 
 const UI = {
+    // Modal related variables
+    modalContainer: null,
+    modalTitle: null,
+    modalBody: null,
+    modalCancelBtn: null,
+    modalConfirmBtn: null,
+    modalCloseBtn: null,
+    
+    // Current modal callback
+    modalCallback: null,
+    
     /**
-     * Initialize UI module
+     * Initialize UI components
      */
     init: () => {
-        UI.setupEventListeners();
+        // Initialize modal elements
+        UI.modalContainer = document.getElementById('modal-container');
+        UI.modalTitle = document.getElementById('modal-title');
+        UI.modalBody = document.getElementById('modal-body');
+        UI.modalCancelBtn = document.getElementById('modal-cancel');
+        UI.modalConfirmBtn = document.getElementById('modal-confirm');
+        UI.modalCloseBtn = document.getElementById('modal-close');
+        
+        // Set up modal event listeners
+        UI.setupModalEventListeners();
+        
+        // Set up toolbar button event listeners
+        UI.setupToolbarEventListeners();
+        
+        // Set up canvas control listeners
+        UI.setupCanvasControlListeners();
+        
+        // Set up code panel listeners
+        UI.setupCodePanelListeners();
     },
     
     /**
-     * Set up event listeners
+     * Set up modal event listeners
      */
-    setupEventListeners: () => {
+    setupModalEventListeners: () => {
+        // Close modal when clicking backdrop or close button
+        UI.modalContainer.querySelector('.modal-backdrop').addEventListener('click', UI.closeModal);
+        UI.modalCloseBtn.addEventListener('click', UI.closeModal);
+        UI.modalCancelBtn.addEventListener('click', UI.closeModal);
+        
+        // Handle confirm button click
+        UI.modalConfirmBtn.addEventListener('click', () => {
+            // Call the callback function if set
+            if (UI.modalCallback) {
+                UI.modalCallback();
+            }
+            UI.closeModal();
+        });
+    },
+    
+    /**
+     * Set up toolbar button event listeners
+     */
+    setupToolbarEventListeners: () => {
         // New SVG button
         document.getElementById('new-svg').addEventListener('click', UI.handleNewSvg);
         
@@ -30,22 +78,14 @@ const UI = {
         // Clean SVG button
         document.getElementById('clean-svg').addEventListener('click', UI.handleCleanSvg);
         
-        // Zoom controls
-        document.getElementById('zoom-in').addEventListener('click', UI.handleZoomIn);
-        document.getElementById('zoom-out').addEventListener('click', UI.handleZoomOut);
+        // Import MusicXML button
+        document.getElementById('import-musicxml').addEventListener('click', UI.handleImportMusicXML);
         
-        // View controls
-        document.getElementById('toggle-grid').addEventListener('click', UI.handleToggleGrid);
-        document.getElementById('toggle-rulers').addEventListener('click', UI.handleToggleRulers);
+        // Convert score button
+        document.getElementById('convert-score').addEventListener('click', UI.handleConvertScore);
         
-        // File input change
+        // File input for opening SVG
         document.getElementById('file-input').addEventListener('change', UI.handleFileInputChange);
-        
-        // Modal close button
-        document.getElementById('modal-close').addEventListener('click', UI.closeModal);
-        
-        // Modal cancel button
-        document.getElementById('modal-cancel').addEventListener('click', UI.closeModal);
     },
     
     /**
@@ -511,6 +551,303 @@ const UI = {
     closeModal: () => {
         const modalContainer = document.getElementById('modal-container');
         modalContainer.classList.add('hidden');
+    },
+    
+    /**
+     * Handle MusicXML import button click
+     */
+    handleImportMusicXML: () => {
+        const template = document.getElementById('musicxml-import-template');
+        const content = template.content.cloneNode(true);
+        
+        UI.showModal('Import MusicXML', content, () => {
+            const source = document.getElementById('musicxml-source').value;
+            
+            if (source === 'file') {
+                const fileInput = document.getElementById('musicxml-file');
+                
+                if (fileInput.files.length === 0) {
+                    alert('Please select a MusicXML file.');
+                    return;
+                }
+                
+                UI.handleMusicXMLFileImport(fileInput.files[0]);
+            } else if (source === 'url') {
+                const example = document.getElementById('musicxml-example').value;
+                UI.handleMusicXMLExampleImport(example);
+            }
+        });
+        
+        // Set up the source toggle
+        const sourceSelect = content.querySelector('#musicxml-source');
+        const fileInputContainer = content.querySelector('#file-input-container');
+        const exampleInputContainer = content.querySelector('#example-input-container');
+        
+        sourceSelect.addEventListener('change', () => {
+            const source = sourceSelect.value;
+            
+            if (source === 'file') {
+                fileInputContainer.classList.remove('hidden');
+                exampleInputContainer.classList.add('hidden');
+            } else if (source === 'url') {
+                fileInputContainer.classList.add('hidden');
+                exampleInputContainer.classList.remove('hidden');
+            }
+        });
+    },
+    
+    /**
+     * Handle MusicXML file import
+     * @param {File} file - The MusicXML file
+     */
+    handleMusicXMLFileImport: (file) => {
+        const reader = new FileReader();
+        
+        reader.onload = (event) => {
+            try {
+                const xmlString = event.target.result;
+                const xmlDoc = MusicXmlParser.parseXmlString(xmlString);
+                
+                // Check for parsing errors
+                const parserError = xmlDoc.querySelector('parsererror');
+                if (parserError) {
+                    alert('MusicXML parsing error: ' + parserError.textContent);
+                    return;
+                }
+                
+                // Convert to SVG
+                const svgElement = MusicXmlParser.convertToSvg(xmlDoc);
+                
+                // Replace current SVG content
+                const svgCanvas = document.getElementById('svg-canvas');
+                svgCanvas.innerHTML = '';
+                
+                // Copy attributes from the generated SVG
+                Array.from(svgElement.attributes).forEach(attr => {
+                    svgCanvas.setAttribute(attr.name, attr.value);
+                });
+                
+                // Copy all child nodes
+                Array.from(svgElement.childNodes).forEach(node => {
+                    svgCanvas.appendChild(node.cloneNode(true));
+                });
+                
+                // Update UI
+                UI.updateLayers();
+                UI.updateSvgCode();
+            } catch (error) {
+                alert('Error processing MusicXML file: ' + error.message);
+            }
+        };
+        
+        reader.onerror = () => {
+            alert('Error reading MusicXML file.');
+        };
+        
+        reader.readAsText(file);
+    },
+    
+    /**
+     * Handle MusicXML example import
+     * @param {string} exampleName - The name of the example to import
+     */
+    handleMusicXMLExampleImport: async (exampleName) => {
+        try {
+            const xmlDoc = await MusicXmlParser.fetchExample(exampleName);
+            
+            // Convert to SVG
+            const svgElement = MusicXmlParser.convertToSvg(xmlDoc);
+            
+            // Replace current SVG content
+            const svgCanvas = document.getElementById('svg-canvas');
+            svgCanvas.innerHTML = '';
+            
+            // Copy attributes from the generated SVG
+            Array.from(svgElement.attributes).forEach(attr => {
+                svgCanvas.setAttribute(attr.name, attr.value);
+            });
+            
+            // Copy all child nodes
+            Array.from(svgElement.childNodes).forEach(node => {
+                svgCanvas.appendChild(node.cloneNode(true));
+            });
+            
+            // Update UI
+            UI.updateLayers();
+            UI.updateSvgCode();
+        } catch (error) {
+            alert('Error importing MusicXML example: ' + error.message);
+        }
+    },
+    
+    /**
+     * Handle convert score button click
+     */
+    handleConvertScore: () => {
+        const svgCanvas = document.getElementById('svg-canvas');
+        
+        // Check if this is a music score
+        const hasMeasures = svgCanvas.querySelectorAll('g[id^="measure-"]').length > 0;
+        
+        if (!hasMeasures) {
+            alert('No music score detected. Please import a MusicXML file first.');
+            return;
+        }
+        
+        try {
+            // Convert the score
+            const continuousSvg = MusicXmlParser.convertToContinuousScore(svgCanvas);
+            
+            // Replace current SVG content
+            svgCanvas.innerHTML = '';
+            
+            // Copy attributes from the generated SVG
+            Array.from(continuousSvg.attributes).forEach(attr => {
+                svgCanvas.setAttribute(attr.name, attr.value);
+            });
+            
+            // Copy all child nodes
+            Array.from(continuousSvg.childNodes).forEach(node => {
+                svgCanvas.appendChild(node.cloneNode(true));
+            });
+            
+            // Update UI
+            UI.updateLayers();
+            UI.updateSvgCode();
+        } catch (error) {
+            alert('Error converting score: ' + error.message);
+        }
+    },
+    
+    /**
+     * Update the layers panel
+     */
+    updateLayers: () => {
+        const svgCanvas = document.getElementById('svg-canvas');
+        const layersContainer = document.getElementById('layers-container');
+        
+        // Clear current layers
+        layersContainer.innerHTML = '';
+        
+        // Get all top-level elements
+        const elements = Array.from(svgCanvas.children);
+        
+        if (elements.length === 0) {
+            const noLayersMessage = document.createElement('div');
+            noLayersMessage.className = 'no-layers-message';
+            noLayersMessage.textContent = 'No elements in SVG';
+            layersContainer.appendChild(noLayersMessage);
+            return;
+        }
+        
+        // Create layer items in reverse order (to match z-index)
+        elements.slice().reverse().forEach(element => {
+            const layerItem = document.createElement('div');
+            layerItem.className = 'layer-item';
+            layerItem.dataset.id = element.id || '';
+            
+            // Determine element type
+            const type = element.tagName.toLowerCase();
+            let name = type;
+            
+            // Try to get a more descriptive name
+            if (element.id) {
+                name = `${type} (${element.id})`;
+            } else {
+                // Generate a name based on attributes
+                if (type === 'rect') {
+                    const width = element.getAttribute('width') || '?';
+                    const height = element.getAttribute('height') || '?';
+                    name = `rect ${width}×${height}`;
+                } else if (type === 'circle') {
+                    const radius = element.getAttribute('r') || '?';
+                    name = `circle (r=${radius})`;
+                } else if (type === 'text') {
+                    name = `text "${element.textContent.slice(0, 10)}${element.textContent.length > 10 ? '...' : ''}"`;
+                } else if (type === 'g') {
+                    const childCount = element.children.length;
+                    name = `group (${childCount} elements)`;
+                }
+            }
+            
+            // Create visibility toggle
+            const visibilityToggle = document.createElement('button');
+            visibilityToggle.className = 'visibility-toggle';
+            visibilityToggle.innerHTML = '<i class="fas fa-eye"></i>';
+            visibilityToggle.title = 'Toggle visibility';
+            
+            visibilityToggle.addEventListener('click', (event) => {
+                event.stopPropagation();
+                
+                // Toggle visibility
+                if (element.style.display === 'none') {
+                    element.style.display = '';
+                    visibilityToggle.innerHTML = '<i class="fas fa-eye"></i>';
+                } else {
+                    element.style.display = 'none';
+                    visibilityToggle.innerHTML = '<i class="fas fa-eye-slash"></i>';
+                }
+                
+                UI.updateSvgCode();
+            });
+            
+            // Create layer name
+            const layerName = document.createElement('span');
+            layerName.className = 'layer-name';
+            layerName.textContent = name;
+            
+            // Create delete button
+            const deleteBtn = document.createElement('button');
+            deleteBtn.className = 'delete-btn';
+            deleteBtn.innerHTML = '<i class="fas fa-trash-alt"></i>';
+            deleteBtn.title = 'Delete element';
+            
+            deleteBtn.addEventListener('click', (event) => {
+                event.stopPropagation();
+                
+                // Remove the element
+                element.parentNode.removeChild(element);
+                
+                // Update UI
+                UI.updateLayers();
+                UI.updateSvgCode();
+                
+                // Clear selection if the deleted element was selected
+                if (Tools.selectedElement === element) {
+                    Tools.clearSelection();
+                }
+            });
+            
+            // Add the components
+            layerItem.appendChild(visibilityToggle);
+            layerItem.appendChild(layerName);
+            layerItem.appendChild(deleteBtn);
+            
+            // Select this element when clicking the layer
+            layerItem.addEventListener('click', () => {
+                Tools.selectElement(element);
+            });
+            
+            // Add to layers container
+            layersContainer.appendChild(layerItem);
+        });
+    },
+    
+    /**
+     * Update the SVG code display
+     */
+    updateSvgCode: () => {
+        const svgCanvas = document.getElementById('svg-canvas');
+        const codeTextarea = document.getElementById('svg-code');
+        
+        // Get the SVG as a string
+        const svgString = SvgParser.svgToString(svgCanvas);
+        
+        // Format the SVG string with indentation
+        const formattedSvg = Utils.formatXml(svgString);
+        
+        // Update the textarea
+        codeTextarea.value = formattedSvg;
     }
 };
 

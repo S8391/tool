@@ -24,6 +24,7 @@
                 <button id="save-svg" class="btn" title="Save SVG"><i class="fas fa-save"></i></button>
                 <button id="export-svg" class="btn" title="Export SVG"><i class="fas fa-file-export"></i></button>
                 <button id="clean-svg" class="btn" title="Clean SVG"><i class="fas fa-broom"></i></button>
+                <button id="import-musicxml" class="btn" title="Import MusicXML"><i class="fas fa-music"></i></button>
             </div>
         </header>
         
@@ -38,6 +39,8 @@
                         <button id="line-tool" class="tool-btn" title="Line"><i class="fas fa-slash"></i></button>
                         <button id="path-tool" class="tool-btn" title="Path"><i class="fas fa-pen"></i></button>
                         <button id="text-tool" class="tool-btn" title="Text"><i class="fas fa-font"></i></button>
+                        <button id="freehand-tool" class="tool-btn" title="Freehand Drawing"><i class="fas fa-pencil-alt"></i></button>
+                        <button id="eraser-tool" class="tool-btn" title="Eraser"><i class="fas fa-eraser"></i></button>
                     </div>
                 </div>
                 <div class="layers-panel">
@@ -58,6 +61,7 @@
                     <div class="view-controls">
                         <button id="toggle-grid" class="btn" title="Toggle Grid"><i class="fas fa-border-all"></i></button>
                         <button id="toggle-rulers" class="btn" title="Toggle Rulers"><i class="fas fa-ruler-combined"></i></button>
+                        <button id="convert-score" class="btn" title="Convert to Continuous Score"><i class="fas fa-exchange-alt"></i></button>
                     </div>
                 </div>
                 <div id="canvas-wrapper" class="canvas-wrapper">
@@ -118,14 +122,52 @@
             </div>
         </div>
     </div>
+    
+    <!-- MusicXML Import Modal Template -->
+    <template id="musicxml-import-template">
+        <div class="musicxml-import-container">
+            <div class="input-group">
+                <label for="musicxml-source">MusicXML Source:</label>
+                <select id="musicxml-source" class="form-control">
+                    <option value="file">Local File</option>
+                    <option value="url">W3C Example</option>
+                </select>
+            </div>
+            
+            <div id="file-input-container" class="input-group mt-3">
+                <label for="musicxml-file">Select MusicXML File:</label>
+                <input type="file" id="musicxml-file" accept=".xml,.musicxml" class="form-control">
+            </div>
+            
+            <div id="example-input-container" class="input-group mt-3 hidden">
+                <label for="musicxml-example">Select Example:</label>
+                <select id="musicxml-example" class="form-control">
+                    <option value="HelloWorld">Hello World</option>
+                    <option value="FrenchHorn">French Horn</option>
+                    <option value="Chromatic">Chromatic Scale</option>
+                    <option value="SimpleUnion">Simple Union</option>
+                    <option value="Chord">Chord Example</option>
+                    <option value="GuitarFingering">Guitar Fingering</option>
+                    <option value="MultipleRest">Multiple Rest</option>
+                    <option value="PercussionDrum">Percussion Drum</option>
+                    <option value="Triplet">Triplet Example</option>
+                    <option value="Tremolo">Tremolo Example</option>
+                </select>
+            </div>
+        </div>
+    </template>
 
     <!-- File input for opening SVG files (hidden) -->
     <input type="file" id="file-input" accept=".svg" style="display: none;">
+    
+    <!-- Hidden clipboard data -->
+    <textarea id="clipboard-data" style="display: none;"></textarea>
 
     <!-- Scripts -->
     <script src="src/js/utils.js"></script>
     <script src="src/js/svgParser.js"></script>
     <script src="src/js/svgCleaner.js"></script>
+    <script src="src/js/musicXmlParser.js"></script>
     <script src="src/js/tools.js"></script>
     <script src="src/js/properties.js"></script>
     <script src="src/js/layers.js"></script>

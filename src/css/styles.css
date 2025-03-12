@@ -472,4 +472,128 @@ h3 {
         border-left: none;
         border-top: 1px solid var(--gray-300);
     }
+}
+
+/* Additional styles for MusicXML import modal */
+.musicxml-import-container {
+    padding: 10px;
+}
+
+.input-group {
+    margin-bottom: 15px;
+}
+
+.input-group label {
+    display: block;
+    margin-bottom: 5px;
+    font-weight: 500;
+}
+
+.form-control {
+    width: 100%;
+    padding: 8px 10px;
+    border: 1px solid #ddd;
+    border-radius: 4px;
+    background-color: #fff;
+    font-size: 14px;
+}
+
+.mt-3 {
+    margin-top: 15px;
+}
+
+.hidden {
+    display: none;
+}
+
+/* Styles for freehand drawing */
+.tool-btn[title="Freehand Drawing"] i {
+    font-size: 0.9em;
+}
+
+.tool-btn[title="Eraser"] i {
+    color: #e74c3c;
+}
+
+/* Styles for element deletion */
+.delete-btn {
+    background: none;
+    border: none;
+    color: #e74c3c;
+    cursor: pointer;
+    padding: 4px;
+    opacity: 0.7;
+    transition: opacity 0.2s;
+}
+
+.delete-btn:hover {
+    opacity: 1;
+}
+
+.visibility-toggle {
+    background: none;
+    border: none;
+    color: #3498db;
+    cursor: pointer;
+    padding: 4px;
+    opacity: 0.7;
+    transition: opacity 0.2s;
+}
+
+.visibility-toggle:hover {
+    opacity: 1;
+}
+
+/* Layer item styles */
+.layer-item {
+    display: flex;
+    align-items: center;
+    padding: 6px 8px;
+    border-bottom: 1px solid #eee;
+    cursor: pointer;
+    transition: background-color 0.2s;
+}
+
+.layer-item:hover {
+    background-color: rgba(52, 152, 219, 0.1);
+}
+
+.layer-item.selected {
+    background-color: rgba(52, 152, 219, 0.2);
+}
+
+.layer-name {
+    flex: 1;
+    margin: 0 8px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    font-size: 13px;
+}
+
+.no-layers-message {
+    padding: 15px;
+    text-align: center;
+    color: #888;
+    font-style: italic;
+}
+
+/* Convert score button styles */
+#convert-score {
+    background-color: #9b59b6;
+    color: white;
+}
+
+#convert-score:hover {
+    background-color: #8e44ad;
+}
+
+/* Import MusicXML button styles */
+#import-musicxml {
+    background-color: #e67e22;
+    color: white;
+}
+
+#import-musicxml:hover {
+    background-color: #d35400;
 } 
